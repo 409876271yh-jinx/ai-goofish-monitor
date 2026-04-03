@@ -104,6 +104,10 @@ def _default_action_settings() -> Dict[str, Any]:
     }
 
 
+def _default_vehicle_filter() -> Dict[str, Any]:
+    return {}
+
+
 def _normalize_action_settings(value: Any) -> Dict[str, Any]:
     default_settings = _default_action_settings()
     if value is None:
@@ -148,6 +152,43 @@ def _normalize_action_settings(value: Any) -> Dict[str, Any]:
     else:
         merged["risk_words"] = list(default_settings["risk_words"])
     return merged
+
+
+def _normalize_vehicle_filter(value: Any) -> Dict[str, Any]:
+    if value is None:
+        return {}
+    if isinstance(value, str):
+        try:
+            import json
+
+            value = json.loads(value)
+        except Exception:
+            return {}
+    if not isinstance(value, dict):
+        return {}
+
+    normalized: Dict[str, Any] = {}
+    for key in ("series", "variant_keywords", "locations"):
+        raw_value = value.get(key)
+        if raw_value is None:
+            continue
+        normalized[key] = _normalize_keyword_values(raw_value)
+
+    for key in ("mileage_km_min", "mileage_km_max", "transfer_count"):
+        raw_value = value.get(key)
+        if raw_value in (None, ""):
+            continue
+        try:
+            normalized[key] = int(raw_value)
+        except (TypeError, ValueError):
+            continue
+
+    for key in ("register_month_start", "register_month_end"):
+        raw_value = _normalize_optional_string(value.get(key))
+        if raw_value:
+            normalized[key] = str(raw_value).strip()
+
+    return normalized
 
 
 def _has_keyword_rules(keyword_rules: List[str]) -> bool:
@@ -198,6 +239,8 @@ class Task(BaseModel):
     decision_mode: Literal["ai", "keyword"] = "ai"
     keyword_rules: List[str] = Field(default_factory=list)
     action_settings: Dict[str, Any] = Field(default_factory=_default_action_settings)
+    enable_structured_prefilter: bool = False
+    vehicle_filter: Dict[str, Any] = Field(default_factory=_default_vehicle_filter)
     is_running: bool = False
 
     @model_validator(mode="before")
@@ -214,6 +257,11 @@ class Task(BaseModel):
     @classmethod
     def normalize_action_settings(cls, value):
         return _normalize_action_settings(value)
+
+    @field_validator("vehicle_filter", mode="before")
+    @classmethod
+    def normalize_vehicle_filter(cls, value):
+        return _normalize_vehicle_filter(value)
 
     def can_start(self) -> bool:
         """检查任务是否可以启动"""
@@ -254,6 +302,8 @@ class TaskCreate(BaseModel):
     decision_mode: Literal["ai", "keyword"] = "ai"
     keyword_rules: List[str] = Field(default_factory=list)
     action_settings: Dict[str, Any] = Field(default_factory=_default_action_settings)
+    enable_structured_prefilter: bool = False
+    vehicle_filter: Dict[str, Any] = Field(default_factory=_default_vehicle_filter)
 
     @model_validator(mode="before")
     @classmethod
@@ -289,6 +339,11 @@ class TaskCreate(BaseModel):
     @classmethod
     def normalize_action_settings(cls, value):
         return _normalize_action_settings(value)
+
+    @field_validator("vehicle_filter", mode="before")
+    @classmethod
+    def normalize_vehicle_filter(cls, value):
+        return _normalize_vehicle_filter(value)
 
     @model_validator(mode="after")
     def validate_decision_mode_payload(self):
@@ -327,6 +382,8 @@ class TaskUpdate(BaseModel):
     decision_mode: Optional[Literal["ai", "keyword"]] = None
     keyword_rules: Optional[List[str]] = None
     action_settings: Optional[Dict[str, Any]] = None
+    enable_structured_prefilter: Optional[bool] = None
+    vehicle_filter: Optional[Dict[str, Any]] = None
     is_running: Optional[bool] = None
 
     @model_validator(mode="before")
@@ -366,6 +423,13 @@ class TaskUpdate(BaseModel):
             return None
         return _normalize_action_settings(value)
 
+    @field_validator("vehicle_filter", mode="before")
+    @classmethod
+    def normalize_vehicle_filter(cls, value):
+        if value is None:
+            return None
+        return _normalize_vehicle_filter(value)
+
     @model_validator(mode="after")
     def validate_partial_keyword_payload(self):
         if self.decision_mode == "keyword" and self.keyword_rules is not None:
@@ -399,6 +463,8 @@ class TaskGenerateRequest(BaseModel):
     decision_mode: Literal["ai", "keyword"] = "ai"
     keyword_rules: List[str] = Field(default_factory=list)
     action_settings: Dict[str, Any] = Field(default_factory=_default_action_settings)
+    enable_structured_prefilter: bool = False
+    vehicle_filter: Dict[str, Any] = Field(default_factory=_default_vehicle_filter)
 
     @model_validator(mode="before")
     @classmethod
@@ -439,6 +505,11 @@ class TaskGenerateRequest(BaseModel):
     @classmethod
     def normalize_action_settings(cls, value):
         return _normalize_action_settings(value)
+
+    @field_validator("vehicle_filter", mode="before")
+    @classmethod
+    def normalize_vehicle_filter(cls, value):
+        return _normalize_vehicle_filter(value)
 
     @model_validator(mode="after")
     def validate_decision_mode_payload(self):

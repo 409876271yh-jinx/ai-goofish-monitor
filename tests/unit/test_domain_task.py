@@ -143,3 +143,31 @@ def test_generate_request_normalizes_action_settings_with_fixed_template():
     assert req.action_settings["primary_action"] == "send_message"
     assert req.action_settings["message_template_id"] == "ask_lowest_price"
     assert req.action_settings["risk_words"] == ["私聊微信", "先付定金"]
+
+
+def test_generate_request_normalizes_vehicle_filter():
+    req = TaskGenerateRequest(
+        task_name="Tesla Model Y",
+        keyword="model y",
+        description="优先看平台结构化字段。",
+        decision_mode="ai",
+        enable_structured_prefilter=True,
+        vehicle_filter={
+            "series": "Model Y,Model Y",
+            "variant_keywords": "2024款,后轮驱动,纯电动",
+            "mileage_km_min": "10000",
+            "mileage_km_max": "35000",
+            "transfer_count": "0",
+            "locations": "四川,重庆",
+            "register_month_start": "2024-09",
+            "register_month_end": "2025-03",
+        },
+    )
+
+    assert req.enable_structured_prefilter is True
+    assert req.vehicle_filter["series"] == ["Model Y"]
+    assert req.vehicle_filter["variant_keywords"] == ["2024款", "后轮驱动", "纯电动"]
+    assert req.vehicle_filter["locations"] == ["四川", "重庆"]
+    assert req.vehicle_filter["mileage_km_min"] == 10000
+    assert req.vehicle_filter["mileage_km_max"] == 35000
+    assert req.vehicle_filter["transfer_count"] == 0

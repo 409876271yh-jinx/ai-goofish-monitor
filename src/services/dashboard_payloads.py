@@ -183,7 +183,13 @@ def _build_recommendation_activity(
     analysis = latest_recommendation.get("ai_analysis", {}) or {}
     title = str(product.get("商品标题") or "发现推荐商品")
     price = parse_price_value(product.get("当前售价"))
-    status = "AI 推荐" if analysis.get("analysis_source") == "ai" else "关键词命中"
+    source = analysis.get("analysis_source")
+    if source == "ai":
+        status = "AI 推荐"
+    elif source == "keyword":
+        status = "关键词命中"
+    else:
+        status = "结构化通过"
     detail = f"当前价 ¥{price:.0f}" if isinstance(price, (int, float)) else None
     activity = build_activity(
         activity_id=f"{filename}:recommended",

@@ -41,6 +41,8 @@ def build_task_create(req: TaskGenerateRequest, criteria_file: str) -> TaskCreat
         decision_mode=req.decision_mode or "ai",
         keyword_rules=req.keyword_rules,
         action_settings=req.action_settings,
+        enable_structured_prefilter=req.enable_structured_prefilter,
+        vehicle_filter=req.vehicle_filter,
     )
 
 

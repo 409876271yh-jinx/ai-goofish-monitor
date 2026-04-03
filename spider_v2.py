@@ -69,6 +69,19 @@ async def main():
             normalized.append(text)
         return normalized
 
+    def normalize_bool(value, default=False):
+        if value is None:
+            return default
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            lowered = value.strip().lower()
+            if lowered in {"1", "true", "yes", "y", "on"}:
+                return True
+            if lowered in {"0", "false", "no", "n", "off"}:
+                return False
+        return bool(value)
+
     def flatten_legacy_groups(groups):
         merged = []
         for group in groups or []:
@@ -107,6 +120,10 @@ async def main():
             task["keyword_rules"] = flatten_legacy_groups(task.get("keyword_rule_groups") or [])
         else:
             task["keyword_rules"] = normalize_keywords(keyword_rules)
+        task["enable_structured_prefilter"] = normalize_bool(
+            task.get("enable_structured_prefilter", False),
+            default=False,
+        )
 
         if decision_mode == "keyword":
             task["ai_prompt_text"] = ""

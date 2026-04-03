@@ -10,6 +10,10 @@ from typing import Awaitable, Callable, Optional
 
 from src.keyword_rule_engine import build_search_text, evaluate_keyword_rules
 from src.services.action_service import ActionService
+from src.services.structured_filter_service import (
+    STRUCTURED_FILTER_ANALYSIS_SOURCE,
+    StructuredFilterService,
+)
 
 
 SellerLoader = Callable[[str], Awaitable[dict]]
@@ -35,6 +39,9 @@ class ItemAnalysisJob:
     login_state_path: Optional[str] = None
     task_max_price: Optional[str] = None
     action_settings: Optional[dict] = None
+    enable_structured_prefilter: bool = False
+    vehicle_filter: Optional[dict] = None
+    detail_payload: Optional[dict] = None
 
 
 class ItemAnalysisDispatcher:
@@ -51,6 +58,7 @@ class ItemAnalysisDispatcher:
         notifier: Notifier,
         saver: Saver,
         action_service: Optional[ActionService] = None,
+        structured_filter_service: Optional[StructuredFilterService] = None,
     ) -> None:
         self._semaphore = asyncio.Semaphore(max(1, concurrency))
         self._skip_ai_analysis = skip_ai_analysis
@@ -60,6 +68,7 @@ class ItemAnalysisDispatcher:
         self._notifier = notifier
         self._saver = saver
         self._action_service = action_service
+        self._structured_filter_service = structured_filter_service or StructuredFilterService()
         self._tasks: set[asyncio.Task] = set()
         self.completed_count = 0
 
@@ -100,6 +109,11 @@ class ItemAnalysisDispatcher:
     async def _build_analysis_result(self, job: ItemAnalysisJob, record: dict) -> dict:
         if job.decision_mode == "keyword":
             return self._build_keyword_result(job, record)
+        structured_filter_result = self._run_structured_prefilter(job, record)
+        if structured_filter_result is not None:
+            self._attach_structured_filter_result(record, structured_filter_result)
+            if not structured_filter_result.get("passed", True):
+                return self._build_structured_filter_reject_result(structured_filter_result)
         if self._skip_ai_analysis:
             return self._build_skip_ai_result()
         return await self._run_ai_analysis(job, record)
@@ -126,6 +140,33 @@ class ItemAnalysisDispatcher:
         if error:
             payload["error"] = error
         return payload
+
+    def _run_structured_prefilter(
+        self,
+        job: ItemAnalysisJob,
+        record: dict,
+    ) -> Optional[dict]:
+        if not job.enable_structured_prefilter:
+            return None
+        return self._structured_filter_service.evaluate_vehicle_filter(
+            record=record,
+            detail_payload=job.detail_payload,
+            vehicle_filter=job.vehicle_filter,
+        )
+
+    def _attach_structured_filter_result(self, record: dict, result: dict) -> None:
+        record["structured_filter_passed"] = bool(result.get("passed", False))
+        record["structured_filter_reason"] = str(result.get("reason") or "")
+        record["structured_filter_checks"] = dict(result.get("checks") or {})
+        record["normalized_fields"] = dict(result.get("normalized_fields") or {})
+
+    def _build_structured_filter_reject_result(self, result: dict) -> dict:
+        return {
+            "analysis_source": STRUCTURED_FILTER_ANALYSIS_SOURCE,
+            "is_recommended": False,
+            "reason": str(result.get("reason") or "结构化字段预筛选未通过"),
+            "keyword_hit_count": 0,
+        }
 
     async def _run_ai_analysis(self, job: ItemAnalysisJob, record: dict) -> dict:
         image_paths: list[str] = []

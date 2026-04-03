@@ -62,6 +62,11 @@ DEFAULT_IMAGE_DOWNLOAD_CONCURRENCY = max(
     _positive_int(os.getenv("IMAGE_DOWNLOAD_CONCURRENCY", "3"), 3),
 )
 
+STRUCTURED_PREFILTER_AI_NOTE = (
+    "结构化字段已通过硬规则校验，不需要重新猜测车系、里程、过户、地区、上牌时间。"
+    "请重点检查图片矛盾、风险车况、卖家可信度和文本风险。"
+)
+
 
 def safe_print(text):
     """安全的打印函数，处理编码错误"""
@@ -111,6 +116,59 @@ def _extract_message_content_types(message: dict) -> list[str]:
     if not isinstance(content, list):
         return [type(content).__name__]
     return [str(item.get("type")) for item in content if isinstance(item, dict)]
+
+
+def _build_ai_payload(product_data: dict) -> dict:
+    if not product_data.get("structured_filter_passed"):
+        return product_data
+
+    item_info = product_data.get("商品信息", {}) or {}
+    seller_info = product_data.get("卖家信息", {}) or {}
+    payload = {
+        "任务名称": product_data.get("任务名称", ""),
+        "商品信息": {
+            "商品ID": item_info.get("商品ID"),
+            "商品标题": item_info.get("商品标题"),
+            "当前售价": item_info.get("当前售价"),
+            "发布时间": item_info.get("发布时间"),
+            "商品链接": item_info.get("商品链接"),
+            "发货地区": item_info.get("发货地区"),
+        },
+        "卖家信息": seller_info,
+        "structured_filter": {
+            "passed": product_data.get("structured_filter_passed"),
+            "reason": product_data.get("structured_filter_reason"),
+            "checks": product_data.get("structured_filter_checks") or {},
+            "normalized_fields": product_data.get("normalized_fields") or {},
+        },
+    }
+
+    short_description = _extract_short_description(item_info)
+    if short_description:
+        payload["商品补充描述"] = short_description
+
+    if product_data.get("价格参考"):
+        payload["价格参考"] = product_data.get("价格参考")
+    if product_data.get("price_insight"):
+        payload["price_insight"] = product_data.get("price_insight")
+    return payload
+
+
+def _augment_prompt_text(prompt_text: str, product_data: dict) -> str:
+    if not product_data.get("structured_filter_passed"):
+        return prompt_text
+    return f"{STRUCTURED_PREFILTER_AI_NOTE}\n\n{prompt_text}"
+
+
+def _extract_short_description(item_info: dict) -> str:
+    for key in ("商品描述", "描述", "宝贝描述", "商品文案"):
+        value = item_info.get(key)
+        if not value:
+            continue
+        text = str(value).strip()
+        if text:
+            return text[:500]
+    return ""
 
 
 @retry_on_failure(retries=2, delay=3)
@@ -311,8 +369,9 @@ async def get_ai_analysis(product_data, image_paths=None, prompt_text=""):
         safe_print("   [AI分析] 错误：未提供AI分析所需的prompt文本。")
         return None
 
-    product_details_json = json.dumps(product_data, ensure_ascii=False, indent=2)
-    system_prompt = prompt_text
+    ai_payload = _build_ai_payload(product_data)
+    product_details_json = json.dumps(ai_payload, ensure_ascii=False, indent=2)
+    system_prompt = _augment_prompt_text(prompt_text, product_data)
 
     if AI_DEBUG_MODE:
         safe_print("\n--- [AI DEBUG] ---")

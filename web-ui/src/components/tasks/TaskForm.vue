@@ -27,13 +27,14 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'submit', data: EmittedData): void
 }>()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const form = ref<any>({})
 const accountStrategy = ref<'auto' | 'fixed' | 'rotate'>('auto')
 const selectedAccountStateFile = ref(AUTO_ACCOUNT_VALUE)
 const keywordRulesInput = ref('')
 const actionRiskWordsInput = ref('')
+const vehicleFilterInput = ref('')
 const cronMode = ref<'preset' | 'custom'>('preset')
 const defaultActionSettings = {
   enabled: false,
@@ -97,6 +98,30 @@ const messageTemplateOptions = computed(() => [
   { value: 'ask_condition', label: t('tasks.form.actionEngine.templates.askCondition') },
   { value: 'ask_battery', label: t('tasks.form.actionEngine.templates.askBattery') },
 ])
+const vehicleFilterPlaceholder = computed(() => {
+  if (locale.value === 'zh') {
+    return `{
+  "series": ["Model Y"],
+  "variant_keywords": ["2024款", "后轮驱动", "纯电动"],
+  "mileage_km_min": 10000,
+  "mileage_km_max": 35000,
+  "transfer_count": 0,
+  "locations": ["四川", "重庆"],
+  "register_month_start": "2024-09",
+  "register_month_end": "2025-03"
+}`
+  }
+  return `{
+  "series": ["Model Y"],
+  "variant_keywords": ["2024", "RWD", "EV"],
+  "mileage_km_min": 10000,
+  "mileage_km_max": 35000,
+  "transfer_count": 0,
+  "locations": ["Sichuan", "Chongqing"],
+  "register_month_start": "2024-09",
+  "register_month_end": "2025-03"
+}`
+})
 
 function parseKeywordText(text: string): string[] {
   const values = String(text || '')
@@ -119,6 +144,29 @@ function parseRiskWords(text: string): string[] {
   return parseKeywordText(text)
 }
 
+function formatVehicleFilter(value: unknown): string {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return ''
+  try {
+    return JSON.stringify(value, null, 2)
+  } catch {
+    return ''
+  }
+}
+
+function parseVehicleFilterInput(text: string): Record<string, unknown> | null {
+  const trimmed = String(text || '').trim()
+  if (!trimmed) return {}
+  try {
+    const parsed = JSON.parse(trimmed)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return null
+    }
+    return parsed as Record<string, unknown>
+  } catch {
+    return null
+  }
+}
+
 watch(() => [props.mode, props.initialData, props.defaultValues, props.defaultAccount], () => {
   const defaultValues = props.defaultValues || {}
   if (props.mode === 'edit' && props.initialData) {
@@ -139,6 +187,14 @@ watch(() => [props.mode, props.initialData, props.defaultValues, props.defaultAc
         defaultValues.new_publish_option || props.initialData.new_publish_option || '__none__',
       region: defaultValues.region || props.initialData.region || '',
       decision_mode: defaultValues.decision_mode || props.initialData.decision_mode || 'ai',
+      enable_structured_prefilter:
+        defaultValues.enable_structured_prefilter ??
+        props.initialData.enable_structured_prefilter ??
+        false,
+      vehicle_filter: {
+        ...(props.initialData.vehicle_filter || {}),
+        ...(defaultValues.vehicle_filter || {}),
+      },
       action_settings: {
         ...defaultActionSettings,
         ...(props.initialData.action_settings || {}),
@@ -151,6 +207,9 @@ watch(() => [props.mode, props.initialData, props.defaultValues, props.defaultAc
       props.initialData.action_settings?.risk_words ||
       defaultActionSettings.risk_words
     ).join('\n')
+    vehicleFilterInput.value = formatVehicleFilter(
+      defaultValues.vehicle_filter || props.initialData.vehicle_filter || {},
+    )
     // 编辑模式下，根据 cron 值判断模式
     const cronVal = defaultValues.cron ?? props.initialData.cron ?? ''
     cronMode.value = isPresetCronValue(cronVal) ? 'preset' : 'custom'
@@ -171,6 +230,8 @@ watch(() => [props.mode, props.initialData, props.defaultValues, props.defaultAc
       new_publish_option: '__none__',
       region: '',
       decision_mode: 'ai',
+      enable_structured_prefilter: false,
+      vehicle_filter: {},
       action_settings: {
         ...defaultActionSettings,
       },
@@ -193,6 +254,7 @@ watch(() => [props.mode, props.initialData, props.defaultValues, props.defaultAc
       defaultValues.action_settings?.risk_words ||
       defaultActionSettings.risk_words
     ).join('\n')
+    vehicleFilterInput.value = formatVehicleFilter(defaultValues.vehicle_filter || {})
     // 创建模式下，根据默认值判断模式
     const cronVal = defaultValues.cron ?? ''
     cronMode.value = isPresetCronValue(cronVal) ? 'preset' : 'custom'
@@ -292,6 +354,21 @@ function handleSubmit() {
   submitData.account_strategy = currentAccountStrategy
   submitData.analyze_images = submitData.analyze_images !== false
   submitData.keyword_rules = decisionMode === 'keyword' ? keywordRules : []
+  submitData.enable_structured_prefilter = Boolean(submitData.enable_structured_prefilter)
+  if (submitData.enable_structured_prefilter) {
+    const parsedVehicleFilter = parseVehicleFilterInput(vehicleFilterInput.value)
+    if (parsedVehicleFilter === null) {
+      toast({
+        title: t('tasks.form.validation.incomplete'),
+        description: t('tasks.form.validation.structuredFilterInvalidJson'),
+        variant: 'destructive',
+      })
+      return
+    }
+    submitData.vehicle_filter = parsedVehicleFilter
+  } else {
+    submitData.vehicle_filter = {}
+  }
   submitData.action_settings = {
     enabled: Boolean(submitData.action_settings?.enabled),
     primary_action: submitData.action_settings?.primary_action || defaultActionSettings.primary_action,
@@ -368,6 +445,26 @@ function handleSubmit() {
             class="min-h-[120px]"
             :placeholder="t('tasks.form.keywordRulesPlaceholder')"
           />
+        </div>
+      </div>
+
+      <div v-if="form.decision_mode === 'ai'" class="col-span-full rounded-2xl border border-sky-100 bg-sky-50/40 p-4">
+        <div class="mb-4 flex items-start justify-between gap-4">
+          <div>
+            <h3 class="text-sm font-black text-slate-800">{{ t('tasks.form.structuredPrefilter.title') }}</h3>
+            <p class="mt-1 text-xs text-slate-500">{{ t('tasks.form.structuredPrefilter.description') }}</p>
+          </div>
+          <Switch v-model="form.enable_structured_prefilter" />
+        </div>
+
+        <div class="space-y-2">
+          <Label>{{ t('tasks.form.structuredPrefilter.config') }}</Label>
+          <Textarea
+            v-model="vehicleFilterInput"
+            class="min-h-[180px] font-mono text-xs"
+            :placeholder="vehicleFilterPlaceholder"
+          />
+          <p class="text-xs text-slate-500">{{ t('tasks.form.structuredPrefilter.configHint') }}</p>
         </div>
       </div>
 

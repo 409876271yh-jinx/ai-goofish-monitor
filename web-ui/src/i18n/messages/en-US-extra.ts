@@ -60,6 +60,12 @@ const enUSExtra = {
       keywordRules: 'Keyword Rules',
       keywordRulesHint: 'Single OR group: any matching keyword recommends the item. One keyword per line or comma-separated; alphanumeric keywords match whole words.',
       keywordRulesPlaceholder: 'Example: a7m4\nVerified Authentic\nFull Frame',
+      structuredPrefilter: {
+        title: 'Structured Pre-filter',
+        description: 'Apply hard rules from platform structured fields before calling AI. Best for vehicles and other categories with stable spec tables.',
+        config: 'vehicle_filter JSON',
+        configHint: 'Only platform structured fields are used here. Missing fields become unknown instead of being guessed from seller free text.',
+      },
       actionEngine: {
         title: 'Action Engine',
         description: 'Run restricted follow-up actions after AI hits. The first version only supports one template-based first message or an order-candidate alert.',
@@ -140,6 +146,7 @@ const enUSExtra = {
         aiDescriptionRequired: 'Detailed requirement is required in AI mode.',
         keywordRuleIncomplete: 'Incomplete keyword rules',
         keywordRuleRequired: 'At least one keyword is required in keyword mode.',
+        structuredFilterInvalidJson: 'Structured pre-filter config must be a valid JSON object.',
         accountStrategyIncomplete: 'Incomplete account strategy',
         fixedAccountRequired: 'A fixed account must be selected in fixed mode.',
       },

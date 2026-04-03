@@ -44,6 +44,8 @@ SCHEMA_STATEMENTS = (
         decision_mode TEXT NOT NULL,
         keyword_rules_json TEXT NOT NULL,
         action_settings_json TEXT NOT NULL DEFAULT '{}',
+        enable_structured_prefilter INTEGER NOT NULL DEFAULT 0,
+        vehicle_filter_json TEXT NOT NULL DEFAULT '{}',
         is_running INTEGER NOT NULL
     )
     """,
@@ -165,6 +167,14 @@ def _ensure_compatible_schema(conn: sqlite3.Connection) -> None:
     if not _column_exists(conn, "tasks", "action_settings_json"):
         conn.execute(
             "ALTER TABLE tasks ADD COLUMN action_settings_json TEXT NOT NULL DEFAULT '{}'"
+        )
+    if not _column_exists(conn, "tasks", "enable_structured_prefilter"):
+        conn.execute(
+            "ALTER TABLE tasks ADD COLUMN enable_structured_prefilter INTEGER NOT NULL DEFAULT 0"
+        )
+    if not _column_exists(conn, "tasks", "vehicle_filter_json"):
+        conn.execute(
+            "ALTER TABLE tasks ADD COLUMN vehicle_filter_json TEXT NOT NULL DEFAULT '{}'"
         )
 
 

@@ -9,10 +9,18 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from '@/components/ui/toast'
-import { getPromptContent, listPrompts, updatePrompt } from '@/api/prompts'
+import { createPrompt, getPromptContent, listPrompts, updatePrompt } from '@/api/prompts'
 import NotificationSettingsPanel from '@/components/settings/NotificationSettingsPanel.vue'
 import RotationSettingsPanel from '@/components/settings/RotationSettingsPanel.vue'
 const { t } = useI18n()
@@ -43,7 +51,11 @@ const selectedPrompt = ref<string | null>(null)
 const promptContent = ref('')
 const isPromptLoading = ref(false)
 const isPromptSaving = ref(false)
+const isCreatePromptOpen = ref(false)
+const isPromptCreating = ref(false)
 const promptError = ref<string | null>(null)
+const newPromptFilename = ref('')
+const newPromptContent = ref('')
 
 function notifySuccess(title: string, description?: string) {
   toast({ title, description })
@@ -142,6 +154,42 @@ async function handleSavePrompt() {
     isPromptSaving.value = false
   }
 }
+
+function resetCreatePromptForm() {
+  newPromptFilename.value = ''
+  newPromptContent.value = ''
+}
+
+async function handleCreatePrompt() {
+  const filename = newPromptFilename.value.trim()
+  if (!filename) {
+    notifyError(t('settings.prompts.filenameRequired'))
+    return
+  }
+
+  isPromptCreating.value = true
+  try {
+    const res = await createPrompt({
+      filename,
+      content: newPromptContent.value,
+    })
+    await fetchPrompts()
+    selectedPrompt.value = res.filename
+    isCreatePromptOpen.value = false
+    resetCreatePromptForm()
+    notifySuccess(t('settings.prompts.createSuccess'), res.message)
+  } catch (e) {
+    notifyError(t('settings.prompts.createFailed'), (e as Error).message)
+  } finally {
+    isPromptCreating.value = false
+  }
+}
+
+watch(isCreatePromptOpen, (open) => {
+  if (!open) {
+    resetCreatePromptForm()
+  }
+})
 
 watch(activeTab, (tab) => {
   if (tab === 'prompts') {
@@ -336,20 +384,27 @@ watch(selectedPrompt, async (value) => {
             </div>
 
             <div class="grid gap-2">
-              <Label>{{ t('settings.prompts.selectFile') }}</Label>
-              <Select
-                :model-value="selectedPrompt || undefined"
-                @update:model-value="(value) => selectedPrompt = value as string"
-              >
-                <SelectTrigger>
-                  <SelectValue :placeholder="t('settings.prompts.placeholder')" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem v-for="file in promptFiles" :key="file" :value="file">
-                    {{ file }}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
+              <div class="flex items-center justify-between gap-3">
+                <Label>{{ t('settings.prompts.selectFile') }}</Label>
+                <Button variant="outline" size="sm" @click="isCreatePromptOpen = true">
+                  {{ t('settings.prompts.create') }}
+                </Button>
+              </div>
+              <div class="flex gap-2">
+                <Select
+                  :model-value="selectedPrompt || undefined"
+                  @update:model-value="(value) => selectedPrompt = value as string"
+                >
+                  <SelectTrigger>
+                    <SelectValue :placeholder="t('settings.prompts.placeholder')" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem v-for="file in promptFiles" :key="file" :value="file">
+                      {{ file }}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <p v-if="!promptFiles.length && !isPromptLoading" class="text-sm text-gray-500">
                 {{ t('settings.prompts.none') }}
               </p>
@@ -371,6 +426,45 @@ watch(selectedPrompt, async (value) => {
             </Button>
           </CardFooter>
         </Card>
+
+        <Dialog v-model:open="isCreatePromptOpen">
+          <DialogContent class="sm:max-w-[520px]">
+            <DialogHeader>
+              <DialogTitle>{{ t('settings.prompts.createDialogTitle') }}</DialogTitle>
+              <DialogDescription>{{ t('settings.prompts.createDialogDescription') }}</DialogDescription>
+            </DialogHeader>
+
+            <div class="grid gap-4 py-2">
+              <div class="grid gap-2">
+                <Label for="prompt-filename">{{ t('settings.prompts.filename') }}</Label>
+                <Input
+                  id="prompt-filename"
+                  v-model="newPromptFilename"
+                  placeholder="example_prompt.txt"
+                />
+              </div>
+
+              <div class="grid gap-2">
+                <Label for="prompt-initial-content">{{ t('settings.prompts.initialContent') }}</Label>
+                <Textarea
+                  id="prompt-initial-content"
+                  v-model="newPromptContent"
+                  class="min-h-[180px]"
+                  :placeholder="t('settings.prompts.initialContentPlaceholder')"
+                />
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" @click="isCreatePromptOpen = false">
+                {{ t('common.cancel') }}
+              </Button>
+              <Button :disabled="isPromptCreating" @click="handleCreatePrompt">
+                {{ isPromptCreating ? t('common.saving') : t('settings.prompts.createConfirm') }}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </TabsContent>
     </Tabs>
   </div>

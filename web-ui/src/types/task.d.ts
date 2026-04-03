@@ -10,6 +10,17 @@ export interface ActionSettings {
   risk_words: string[];
 }
 
+export interface VehicleFilter {
+  series?: string[];
+  variant_keywords?: string[];
+  mileage_km_min?: number;
+  mileage_km_max?: number;
+  transfer_count?: number;
+  locations?: string[];
+  register_month_start?: string;
+  register_month_end?: string;
+}
+
 export interface Task {
   id: number;
   task_name: string;
@@ -33,6 +44,8 @@ export interface Task {
   decision_mode: 'ai' | 'keyword';
   keyword_rules: string[];
   action_settings: ActionSettings;
+  enable_structured_prefilter: boolean;
+  vehicle_filter: VehicleFilter;
   is_running: boolean;
 }
 
@@ -85,4 +98,6 @@ export interface TaskGenerateRequest {
   decision_mode?: 'ai' | 'keyword';
   keyword_rules?: string[];
   action_settings?: ActionSettings;
+  enable_structured_prefilter?: boolean;
+  vehicle_filter?: VehicleFilter;
 }

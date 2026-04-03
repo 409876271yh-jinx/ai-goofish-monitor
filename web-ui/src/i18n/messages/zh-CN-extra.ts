@@ -60,6 +60,12 @@ const zhCNExtra = {
       keywordRules: '关键词规则',
       keywordRulesHint: '单组 OR 逻辑：命中任一关键词即推荐。每行一个关键词，或使用逗号分隔；纯英数字关键词按完整词匹配。',
       keywordRulesPlaceholder: '示例：a7m4\n验货宝\n全画幅',
+      structuredPrefilter: {
+        title: '结构化字段预筛选',
+        description: '在调用 AI 前先用平台结构化字段做硬规则过滤。适合车辆等有明确参数表的类目。',
+        config: 'vehicle_filter 配置（JSON）',
+        configHint: '仅使用平台结构化字段判断，不依赖卖家自由描述。字段缺失会标记 unknown，不会瞎猜。',
+      },
       actionEngine: {
         title: '动作引擎',
         description: '在 AI 命中后执行受限自动动作。当前仅支持自动发送一条模板首句，或生成候选下单提醒。',
@@ -140,6 +146,7 @@ const zhCNExtra = {
         aiDescriptionRequired: 'AI 模式下详细需求不能为空。',
         keywordRuleIncomplete: '关键词规则不完整',
         keywordRuleRequired: '关键词模式下至少需要一个关键词。',
+        structuredFilterInvalidJson: '结构化预筛选配置必须是合法的 JSON 对象。',
         accountStrategyIncomplete: '账号策略不完整',
         fixedAccountRequired: '固定账号模式下必须选择一个账号。',
       },

@@ -1105,6 +1105,11 @@ async def scrape_xianyu(task_config: dict, debug_limit: int = 0):
                                         login_state_path=state_path,
                                         task_max_price=task_config.get("max_price"),
                                         action_settings=task_config.get("action_settings"),
+                                        enable_structured_prefilter=bool(
+                                            task_config.get("enable_structured_prefilter", False)
+                                        ),
+                                        vehicle_filter=task_config.get("vehicle_filter"),
+                                        detail_payload=detail_json,
                                     )
                                 )
 
